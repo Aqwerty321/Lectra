@@ -6,6 +6,10 @@ module.exports = {
   ],
   theme: {
     extend: {
+      colors: {
+        beige: '#F5E6D3',
+        'darkest-wood': '#2C1810',
+      },
       fontFamily: {
         'sans': ['Modulus', 'Inter', 'system-ui', 'sans-serif'],
       },

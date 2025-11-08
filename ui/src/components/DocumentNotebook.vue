@@ -104,6 +104,12 @@
           <span v-else>🚀 Upload & Process</span>
         </button>
 
+        <!-- Upload Error -->
+        <div v-if="uploadError" class="mt-4 p-4 rounded-lg bg-red-50 border border-red-200">
+          <h4 class="font-semibold text-red-900 mb-2">❌ Upload Failed</h4>
+          <p class="text-sm text-red-800">{{ uploadError }}</p>
+        </div>
+
         <!-- Upload Result -->
         <div v-if="uploadResult" class="mt-6 p-4 rounded-lg bg-green-50 border border-green-200">
           <h4 class="font-semibold text-green-900 mb-2">✅ Processing Complete!</h4>
@@ -437,12 +443,13 @@
           <p class="text-red-800">{{ interactiveError }}</p>
         </div>
 
-        <!-- Lecture Player -->
-        <LecturePlayer
+        <!-- Interactive Lecture Player -->
+        <InteractiveLecture
           v-if="interactiveAudioSrc && interactiveTimings && interactiveAnimations"
           :audioSrc="interactiveAudioSrc"
           :timings="interactiveTimings"
           :animations="interactiveAnimations"
+          :projectName="selectedInteractiveProject"
         />
         
         <!-- Empty State -->
@@ -469,13 +476,14 @@ import { fetch as tauriFetch } from '@tauri-apps/api/http'
 import { Body } from '@tauri-apps/api/http'
 import { convertFileSrc } from '@tauri-apps/api/tauri'
 import InteractiveStudyMode from './InteractiveStudyMode.vue'
-import LecturePlayer from './LecturePlayer.vue'
+import InteractiveLecture from './interactive/InteractiveLecture.vue'
 
 const activeTab = ref('upload')
 const projectName = ref('my-lecture')
 const selectedFile = ref(null)
 const uploading = ref(false)
 const uploadResult = ref(null)
+const uploadError = ref(null)
 const projects = ref([])
 const selectedCollection = ref('')
 const topicQuery = ref('')
@@ -519,28 +527,46 @@ async function uploadDocument() {
   
   uploading.value = true
   uploadResult.value = null
+  uploadError.value = null
   
   try {
-    // Create FormData
+    console.log('🚀 Starting document upload...')
+    console.log('   Project:', projectName.value)
+    console.log('   File:', selectedFile.value.name)
+    
+    // Use standard fetch with FormData instead of Tauri fetch
     const formData = new FormData()
     formData.append('file', selectedFile.value)
     formData.append('project', projectName.value)
     
-    // Upload via Tauri HTTP
-    const response = await tauriFetch(`http://127.0.0.1:8765/upload_document?project=${projectName.value}`, {
+    console.log('📤 Uploading to backend...')
+    
+    // Use native fetch API which handles multipart correctly
+    const response = await fetch('http://127.0.0.1:8765/upload_document', {
       method: 'POST',
-      body: Body.form(formData),
-      responseType: 1 // JSON
+      body: formData
     })
     
+    console.log('📥 Response received:', response.status)
+    
     if (response.ok) {
-      uploadResult.value = response.data
+      const data = await response.json()
+      uploadResult.value = data
+      console.log('✅ Upload successful!')
+      console.log('   Topics found:', data.topics?.length || 0)
+      console.log('   Chunks created:', data.chunk_count)
+      
       await loadProjects() // Refresh projects list
     } else {
-      alert('Upload failed: ' + (response.data?.detail || 'Unknown error'))
+      const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
+      const errorMsg = errorData.detail || 'Unknown error'
+      uploadError.value = errorMsg
+      console.error('❌ Upload failed:', errorMsg)
+      alert('Upload failed: ' + errorMsg)
     }
   } catch (error) {
-    console.error('Upload error:', error)
+    console.error('❌ Upload error:', error)
+    uploadError.value = error.message
     alert('Upload failed: ' + error.message)
   } finally {
     uploading.value = false
@@ -608,28 +634,35 @@ async function generatePresentation() {
   }
 }
 
-function loadVideo() {
+async function loadVideo() {
   if (!viewerProject.value) {
     videoPath.value = null
     return
   }
   
-  // Get the lectures folder from the backend - typically ~/Lectures
-  // For now, construct path assuming standard location
-  const lecturesFolder = 'Lectures' // Relative to user home
-  const videoFilePath = `${lecturesFolder}/${viewerProject.value}/presentation_video.mp4`
-  
-  // Construct full path for the current OS
-  const homePath = window.navigator.platform.toLowerCase().includes('win') 
-    ? `C:\\Users\\${window.navigator.userAgent.match(/Windows NT [^;)]+/)?.[0] || 'user'}\\${lecturesFolder}`
-    : `${process.env.HOME || '~'}/${lecturesFolder}`
-  
-  const fullPath = `${homePath}/${viewerProject.value}/presentation_video.mp4`.replace(/\//g, '\\')
-  videoPath.value = convertFileSrc(fullPath)
-  shareFilePath.value = fullPath
-  
-  console.log('Loading video from:', fullPath)
-  console.log('Converted path:', videoPath.value)
+  try {
+    // Get video path from backend API to ensure correct path
+    const response = await tauriFetch(
+      `http://127.0.0.1:8765/get_video?project=${encodeURIComponent(viewerProject.value)}`,
+      { method: 'GET', responseType: 1 }
+    )
+    
+    if (!response.ok || !response.data || !response.data.video_path) {
+      console.error('Video not found')
+      videoPath.value = null
+      return
+    }
+    
+    const fullPath = response.data.video_path
+    videoPath.value = convertFileSrc(fullPath)
+    shareFilePath.value = fullPath
+    
+    console.log('Loading video from:', fullPath)
+    console.log('Converted path:', videoPath.value)
+  } catch (error) {
+    console.error('Failed to load video path:', error)
+    videoPath.value = null
+  }
 }
 
 function changePlaybackSpeed() {
@@ -694,17 +727,31 @@ async function loadInteractiveLecture() {
   interactiveError.value = null
   
   try {
-    // Construct paths
-    const homePath = window.navigator.platform.toLowerCase().includes('win')
-      ? `C:\\Users\\${window.navigator.userAgent.match(/Windows NT [^;)]+/)?.[0] || 'user'}\\Lectures`
-      : `~/Lectures`
+    console.log('=== Loading Interactive Lecture ===')
+    console.log('Project:', interactiveProject.value)
     
-    const audioPath = `${homePath}\\${interactiveProject.value}\\narration.mp3`.replace(/\//g, '\\')
-    interactiveAudioSrc.value = convertFileSrc(audioPath)
+    // Get audio path from API to ensure correct path
+    const audioInfoResp = await tauriFetch(
+      `http://127.0.0.1:8765/get_audio?project=${encodeURIComponent(interactiveProject.value)}`,
+      { method: 'GET', responseType: 1 }
+    )
+    
+    if (!audioInfoResp.ok || !audioInfoResp.data || !audioInfoResp.data.audio_path) {
+      throw new Error('Audio file not found for this lecture')
+    }
+    
+    const audioPath = audioInfoResp.data.audio_path
+    console.log('Audio path:', audioPath)
+    
+    const audioSrc = convertFileSrc(audioPath)
+    console.log('Converted audio src:', audioSrc)
+    
+    interactiveAudioSrc.value = audioSrc
     
     // Load timings
+    console.log('Loading slide timings...')
     const timingsResp = await tauriFetch(
-      `http://127.0.0.1:8765/get_slide_timings?project=${interactiveProject.value}`,
+      `http://127.0.0.1:8765/get_slide_timings?project=${encodeURIComponent(interactiveProject.value)}`,
       { method: 'GET', responseType: 1 }
     )
     
@@ -713,10 +760,12 @@ async function loadInteractiveLecture() {
     }
     
     interactiveTimings.value = timingsResp.data
+    console.log('✅ Timings loaded:', interactiveTimings.value)
     
     // Load animations
+    console.log('Loading animations...')
     const animationsResp = await tauriFetch(
-      `http://127.0.0.1:8765/get_animations?project=${interactiveProject.value}`,
+      `http://127.0.0.1:8765/get_animations?project=${encodeURIComponent(interactiveProject.value)}`,
       { method: 'GET', responseType: 1 }
     )
     
@@ -725,15 +774,14 @@ async function loadInteractiveLecture() {
     }
     
     interactiveAnimations.value = animationsResp.data
+    console.log('✅ Animations loaded:', interactiveAnimations.value)
     
-    console.log('Interactive lecture loaded:', {
-      audio: interactiveAudioSrc.value,
-      timings: interactiveTimings.value,
-      animations: interactiveAnimations.value
-    })
+    console.log('=== Interactive Lecture Ready ===')
+    console.log('Audio:', interactiveAudioSrc.value)
+    console.log('Slides:', interactiveAnimations.value?.slides?.length || 0)
     
   } catch (error) {
-    console.error('Failed to load interactive lecture:', error)
+    console.error('❌ Failed to load interactive lecture:', error)
     interactiveError.value = error.message || 'Failed to load interactive lecture'
     interactiveAudioSrc.value = null
     interactiveTimings.value = null

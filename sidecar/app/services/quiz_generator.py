@@ -34,8 +34,17 @@ class QuizGenerator:
             List of MCQ dictionaries with question, options, correct_answer, explanation
         """
         
+        print(f"\n--- QuizGenerator.generate_mcqs ---")
+        print(f"Titles: {slide_titles}")
+        print(f"Num questions: {num_questions}")
+        print(f"Difficulty: {difficulty}")
+        print(f"Language: {lang}")
+        
         # Craft prompt for Ollama
         prompt = self._build_quiz_prompt(slide_content, slide_titles, num_questions, difficulty, lang)
+        
+        print(f"Prompt length: {len(prompt)} chars")
+        print(f"Calling Ollama at {self.ollama_url}...")
         
         try:
             response = requests.post(
@@ -52,16 +61,31 @@ class QuizGenerator:
                 timeout=120
             )
             
+            print(f"Ollama response status: {response.status_code}")
+            
             if response.status_code == 200:
                 result = response.json()
-                mcqs = self._parse_mcqs(result.get("response", ""))
-                return mcqs[:num_questions]  # Ensure we return exactly num_questions
+                response_text = result.get("response", "")
+                print(f"Ollama response length: {len(response_text)} chars")
+                print(f"Response preview: {response_text[:200]}...")
+                
+                mcqs = self._parse_mcqs(response_text)
+                print(f"Parsed {len(mcqs)} MCQs from response")
+                
+                final_mcqs = mcqs[:num_questions]
+                print(f"Returning {len(final_mcqs)} MCQs")
+                return final_mcqs
             else:
-                print(f"Ollama API error: {response.status_code}")
+                print(f"✗ Ollama API error: {response.status_code}")
+                print(f"Response: {response.text}")
+                print("Falling back to simple MCQs")
                 return self._generate_fallback_mcqs(slide_titles, num_questions)
                 
         except Exception as e:
-            print(f"Quiz generation error: {e}")
+            print(f"✗ Quiz generation exception: {e}")
+            import traceback
+            traceback.print_exc()
+            print("Falling back to simple MCQs")
             return self._generate_fallback_mcqs(slide_titles, num_questions)
     
     def _build_quiz_prompt(
@@ -103,8 +127,9 @@ REQUIREMENTS:
 - Questions should test understanding, not just memorization
 {"- ALL text must be in HINDI (Devanagari script)" if lang == "hi" else ""}
 
-FORMAT YOUR RESPONSE EXACTLY AS:
-```json
+CRITICAL: Respond ONLY with the JSON array. Do not include any introductory text, explanations, or markdown code blocks.
+
+FORMAT YOUR RESPONSE EXACTLY AS (JUST THE JSON ARRAY, NOTHING ELSE):
 [
   {{
     "question": "What is the main concept discussed in slide 2?",
@@ -121,9 +146,8 @@ FORMAT YOUR RESPONSE EXACTLY AS:
     "slide_reference": 2
   }}
 ]
-```
 
-Generate the MCQs now:"""
+Generate ONLY the JSON array now (no other text):"""
         
         return prompt
     
@@ -141,7 +165,15 @@ Generate the MCQs now:"""
                 json_end = response_text.find("```", json_start)
                 json_text = response_text[json_start:json_end].strip()
             else:
-                json_text = response_text.strip()
+                # No code blocks - try to find JSON array directly
+                # Look for the first [ and last ]
+                json_start = response_text.find('[')
+                json_end = response_text.rfind(']')
+                
+                if json_start != -1 and json_end != -1 and json_end > json_start:
+                    json_text = response_text[json_start:json_end + 1].strip()
+                else:
+                    json_text = response_text.strip()
             
             # Parse JSON
             mcqs = json.loads(json_text)
@@ -180,11 +212,13 @@ Generate the MCQs now:"""
     def _generate_fallback_mcqs(self, titles: List[str], num_questions: int) -> List[Dict[str, Any]]:
         """Generate simple fallback MCQs if Ollama fails."""
         
+        print(f"\n⚠️ Generating {num_questions} fallback MCQs...")
+        
         fallback_mcqs = []
         for i in range(min(num_questions, len(titles))):
             title = titles[i]
             fallback_mcqs.append({
-                "question": f"What is the main topic of slide '{title}'?",
+                "question": f"What is the main topic covered in the section titled '{title}'?",
                 "options": {
                     "A": title,
                     "B": "None of the above",
@@ -192,12 +226,31 @@ Generate the MCQs now:"""
                     "D": "Not covered in this presentation"
                 },
                 "correct_answer": "A",
-                "explanation": f"The correct answer is A. The slide '{title}' directly addresses this topic.",
-                "hint": "Look at the slide title",
+                "explanation": f"The correct answer is A. The section '{title}' directly addresses this topic as indicated by its title.",
+                "hint": "Look at the section title for the answer",
                 "difficulty": "easy",
                 "slide_reference": i + 1
             })
         
+        # If we need more questions than titles, add generic ones
+        while len(fallback_mcqs) < num_questions:
+            fallback_mcqs.append({
+                "question": f"This is a placeholder question {len(fallback_mcqs) + 1}. What was covered in this lecture?",
+                "options": {
+                    "A": "Important concepts",
+                    "B": "Key principles",
+                    "C": "Core ideas",
+                    "D": "All of the above"
+                },
+                "correct_answer": "D",
+                "explanation": "This is a fallback question. All options are correct as the lecture covered important concepts, key principles, and core ideas.",
+                "hint": "All options are valid",
+                "difficulty": "easy",
+                "slide_reference": 1
+            })
+        
+        print(f"✓ Generated {len(fallback_mcqs)} fallback MCQs")
+        return fallback_mcqs
         return fallback_mcqs
     
     def generate_quiz_checkpoints(
@@ -248,25 +301,38 @@ def generate_quiz_for_slides(
         Dictionary with quiz data and metadata
     """
     
+    print(f"\n--- Generate Quiz For Slides ---")
+    print(f"Project: {project_path}")
+    print(f"Slide range: {slide_range}")
+    
     # Load presentation metadata
     metadata_path = project_path / "metadata.json"
     if not metadata_path.exists():
+        print(f"✗ Metadata not found: {metadata_path}")
         raise FileNotFoundError(f"Metadata not found: {metadata_path}")
+    
+    print(f"✓ Loading metadata from {metadata_path}")
     
     with open(metadata_path, 'r', encoding='utf-8') as f:
         metadata = json.load(f)
     
     # Detect language from metadata
     lang = metadata.get("lang", "en")
+    print(f"Language: {lang}")
     
     # Extract slide content from range
     slides = metadata.get("slides", [])
     start, end = slide_range
     
+    print(f"Total slides in metadata: {len(slides)}")
+    print(f"Requested range: {start} to {end}")
+    
     if start < 0 or end >= len(slides):
+        print(f"✗ Invalid slide range: {slide_range} (total slides: {len(slides)})")
         raise ValueError(f"Invalid slide range: {slide_range} (total slides: {len(slides)})")
     
     target_slides = slides[start:end + 1]
+    print(f"Extracted {len(target_slides)} slides for quiz")
     
     # Combine content
     slide_titles = [slide.get("title", f"Slide {i+start+1}") for i, slide in enumerate(target_slides)]
@@ -275,11 +341,17 @@ def generate_quiz_for_slides(
         for i, slide in enumerate(target_slides)
     ])
     
+    print(f"Slide titles: {slide_titles}")
+    print(f"Content length: {len(slide_content)} chars")
+    
     # Generate quiz with language support
+    print(f"Calling QuizGenerator with {num_questions} questions, difficulty: {difficulty}")
     generator = QuizGenerator()
     mcqs = generator.generate_mcqs(slide_content, slide_titles, num_questions, difficulty, lang)
     
-    return {
+    print(f"✓ Generated {len(mcqs)} MCQs")
+    
+    quiz_data = {
         "slide_range": slide_range,
         "slide_titles": slide_titles,
         "num_questions": len(mcqs),
@@ -288,3 +360,6 @@ def generate_quiz_for_slides(
         "questions": mcqs,
         "checkpoint_id": f"quiz_{start}_{end}"
     }
+    
+    print(f"--- Quiz Generation Complete ---\n")
+    return quiz_data

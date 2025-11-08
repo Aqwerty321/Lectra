@@ -8,6 +8,7 @@ from pathlib import Path
 import traceback
 import asyncio
 import json
+import re
 from pydub import AudioSegment
 
 from .config import config
@@ -1000,8 +1001,14 @@ async def upload_document(
         # Process document
         doc_data = document_processor.process_document(file_path)
         
-        # Create collection name from filename
-        collection_name = f"{project}_{Path(file.filename).stem}"
+        # Create collection name from filename (sanitize for ChromaDB)
+        # ChromaDB requires: 3-512 chars, [a-zA-Z0-9._-], start/end with [a-zA-Z0-9]
+        raw_name = f"{project}_{Path(file.filename).stem}"
+        collection_name = re.sub(r'[^a-zA-Z0-9._-]', '_', raw_name)  # Replace invalid chars
+        collection_name = re.sub(r'_+', '_', collection_name)  # Collapse multiple underscores
+        collection_name = collection_name.strip('._-')  # Remove invalid start/end chars
+        
+        print(f"📚 Collection name: {collection_name}")
         
         # Get vector store and add documents
         vs = vector_store.get_vector_store(
@@ -1174,6 +1181,146 @@ async def get_video(project: str):
         )
 
 
+@app.get("/get_slide_image")
+async def get_slide_image(project: str, slide_index: int):
+    """Get a specific slide as an image from the PPTX."""
+    try:
+        from pptx import Presentation
+        from PIL import Image
+        import io
+        
+        project_dir = Path.home() / "Lectures" / project
+        pptx_path = project_dir / "presentation.pptx"
+        slides_dir = project_dir / "slide_images"
+        
+        if not pptx_path.exists():
+            raise HTTPException(
+                status_code=404,
+                detail="Presentation not found. Generate a presentation first."
+            )
+        
+        # Create slides directory if it doesn't exist
+        slides_dir.mkdir(exist_ok=True)
+        
+        # Check if image already exists
+        image_path = slides_dir / f"slide_{slide_index}.png"
+        
+        if not image_path.exists():
+            # Convert PPTX to images using pptx2pdf approach
+            # For now, we'll create placeholder images with slide content
+            prs = Presentation(str(pptx_path))
+            
+            if slide_index < 0 or slide_index >= len(prs.slides):
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Slide {slide_index} not found. Presentation has {len(prs.slides)} slides."
+                )
+            
+            # Extract slide as image (we'll render text on a canvas)
+            slide = prs.slides[slide_index]
+            
+            # Create image (1920x1080 for 16:9 ratio)
+            from PIL import Image, ImageDraw, ImageFont
+            img = Image.new('RGB', (1920, 1080), color='#1a1a1a')
+            draw = ImageDraw.Draw(img)
+            
+            # Try to use a nice font, fallback to default
+            try:
+                title_font = ImageFont.truetype("arial.ttf", 72)
+                content_font = ImageFont.truetype("arial.ttf", 48)
+            except:
+                title_font = ImageFont.load_default()
+                content_font = ImageFont.load_default()
+            
+            y_position = 100
+            
+            # Extract text from shapes
+            for shape in slide.shapes:
+                if hasattr(shape, "text") and shape.text.strip():
+                    text = shape.text.strip()
+                    
+                    # Title vs content
+                    if y_position < 200:
+                        font = title_font
+                        color = '#FFD700'  # Gold for title
+                    else:
+                        font = content_font
+                        color = '#FFFFFF'  # White for content
+                    
+                    # Word wrap
+                    words = text.split()
+                    lines = []
+                    current_line = []
+                    
+                    for word in words:
+                        current_line.append(word)
+                        test_line = ' '.join(current_line)
+                        bbox = draw.textbbox((0, 0), test_line, font=font)
+                        if bbox[2] - bbox[0] > 1800:  # Max width
+                            current_line.pop()
+                            if current_line:
+                                lines.append(' '.join(current_line))
+                            current_line = [word]
+                    
+                    if current_line:
+                        lines.append(' '.join(current_line))
+                    
+                    # Draw lines
+                    for line in lines:
+                        bbox = draw.textbbox((0, 0), line, font=font)
+                        text_width = bbox[2] - bbox[0]
+                        x_position = (1920 - text_width) // 2
+                        draw.text((x_position, y_position), line, fill=color, font=font)
+                        y_position += 80 if font == title_font else 60
+                    
+                    y_position += 40
+            
+            # Save image
+            img.save(str(image_path), 'PNG', quality=95)
+        
+        return {
+            "slide_path": str(image_path),
+            "exists": True,
+            "size_kb": image_path.stat().st_size / 1024
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get slide image: {str(e)}\n{traceback.format_exc()}"
+        )
+
+
+@app.get("/get_audio")
+async def get_audio(project: str):
+    """Get the generated audio file path for interactive lecture."""
+    try:
+        project_dir = Path.home() / "Lectures" / project
+        audio_path = project_dir / "narration.mp3"
+        
+        if not audio_path.exists():
+            raise HTTPException(
+                status_code=404,
+                detail="Audio not found. Generate a presentation first."
+            )
+        
+        return {
+            "audio_path": str(audio_path),
+            "exists": True,
+            "size_mb": audio_path.stat().st_size / (1024 * 1024)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get audio: {str(e)}"
+        )
+
+
 @app.get("/get_slide_timings")
 async def get_slide_timings(project: str):
     """Get the slide timings for accurate slide tracking during video playback."""
@@ -1281,11 +1428,20 @@ async def generate_quiz(request: GenerateQuizRequest):
     """
     from .services.quiz_generator import generate_quiz_for_slides
     
+    print(f"\n=== QUIZ GENERATION REQUEST ===")
+    print(f"Project: {request.project}")
+    print(f"Slide range: {request.slide_start} to {request.slide_end}")
+    print(f"Num questions: {request.num_questions}")
+    print(f"Difficulty: {request.difficulty}")
+    
     try:
         project_path = config.OUTPUT_ROOT / request.project
         
         if not project_path.exists():
+            print(f"✗ Project not found: {project_path}")
             raise HTTPException(status_code=404, detail=f"Project not found: {request.project}")
+        
+        print(f"✓ Project path exists: {project_path}")
         
         quiz_data = generate_quiz_for_slides(
             project_path=project_path,
@@ -1293,6 +1449,10 @@ async def generate_quiz(request: GenerateQuizRequest):
             num_questions=request.num_questions,
             difficulty=request.difficulty
         )
+        
+        print(f"✓ Quiz generated successfully")
+        print(f"  Questions generated: {len(quiz_data.get('questions', []))}")
+        print(f"  Checkpoint ID: {quiz_data.get('checkpoint_id')}")
         
         # Cache quiz for later retrieval
         quiz_cache_path = project_path / "quiz_cache.json"
@@ -1307,17 +1467,21 @@ async def generate_quiz(request: GenerateQuizRequest):
             
             with open(quiz_cache_path, 'w', encoding='utf-8') as f:
                 json.dump(existing_cache, f, indent=2)
+            print(f"✓ Quiz cached to {quiz_cache_path}")
         except Exception as cache_err:
-            print(f"Warning: Failed to cache quiz: {cache_err}")
+            print(f"⚠ Warning: Failed to cache quiz: {cache_err}")
         
+        print(f"=== QUIZ GENERATION COMPLETE ===\n")
         return quiz_data
         
     except FileNotFoundError as e:
+        print(f"✗ File not found error: {e}")
         raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
+        print(f"✗ Value error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"Quiz generation error: {e}")
+        print(f"✗ Quiz generation error: {e}")
         traceback.print_exc()
         raise HTTPException(
             status_code=500,

@@ -94,9 +94,12 @@ class VectorStore:
             except:
                 pass
             
+            # Ensure metadata is not None or empty
+            collection_metadata = metadata if metadata else {"created": "true"}
+            
             collection = self.client.create_collection(
                 name=name,
-                metadata=metadata or {}
+                metadata=collection_metadata
             )
             
             logger.info(f"✅ Created collection: {name}")
@@ -263,8 +266,8 @@ class VectorStore:
             raise
 
 
-# Global vector store instance
-_vector_store: Optional[VectorStore] = None
+# Global vector store instances keyed by persist_directory
+_vector_stores: Dict[str, VectorStore] = {}
 
 
 def get_vector_store(
@@ -272,7 +275,7 @@ def get_vector_store(
     ollama_url: str = "http://localhost:11434"
 ) -> VectorStore:
     """
-    Get or create global vector store instance.
+    Get or create vector store instance for the given persist directory.
     
     Args:
         persist_directory: ChromaDB persist directory
@@ -281,9 +284,13 @@ def get_vector_store(
     Returns:
         VectorStore instance
     """
-    global _vector_store
+    global _vector_stores
     
-    if _vector_store is None:
-        _vector_store = VectorStore(persist_directory, ollama_url)
+    # Normalize path
+    persist_dir_key = str(Path(persist_directory).resolve())
     
-    return _vector_store
+    if persist_dir_key not in _vector_stores:
+        _vector_stores[persist_dir_key] = VectorStore(persist_directory, ollama_url)
+        logger.info(f"📦 Created new VectorStore instance for {persist_dir_key}")
+    
+    return _vector_stores[persist_dir_key]

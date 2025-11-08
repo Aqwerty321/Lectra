@@ -114,18 +114,27 @@
       </div>
 
       <!-- Quiz Section -->
-      <div v-if="quizMode && currentQuiz" class="bg-white rounded-xl p-6 shadow-lg">
-        <div class="flex items-center justify-between mb-6">
-          <h3 class="text-xl font-semibold text-purple-900">
-            📝 Quiz {{ currentCheckpoint + 1 }}
-          </h3>
-          <div class="text-sm text-gray-600">
-            Score: <span class="font-bold text-purple-700">{{ quizScore }} / {{ answeredQuestions }}</span>
-          </div>
+      <div v-if="quizMode" class="bg-white rounded-xl p-6 shadow-lg">
+        <!-- Loading State -->
+        <div v-if="!currentQuiz && loading" class="text-center py-12">
+          <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-purple-500 border-t-transparent mb-4"></div>
+          <p class="text-lg font-semibold text-purple-900">Generating Quiz...</p>
+          <p class="text-sm text-gray-600 mt-2">Using AI to create personalized questions</p>
         </div>
+        
+        <!-- Quiz Content -->
+        <div v-else-if="currentQuiz">
+          <div class="flex items-center justify-between mb-6">
+            <h3 class="text-xl font-semibold text-purple-900">
+              📝 Quiz {{ currentCheckpoint + 1 }}
+            </h3>
+            <div class="text-sm text-gray-600">
+              Score: <span class="font-bold text-purple-700">{{ quizScore }} / {{ answeredQuestions }}</span>
+            </div>
+          </div>
 
         <!-- Current Question -->
-        <div v-if="currentQuestionIndex < currentQuiz.questions.length">
+        <div v-if="currentQuiz.questions && currentQuestionIndex < currentQuiz.questions.length">
           <div class="mb-6">
             <div class="flex items-center justify-between mb-3">
               <span class="text-sm font-medium text-gray-600">
@@ -203,7 +212,7 @@
         </div>
 
         <!-- Quiz Complete -->
-        <div v-else class="text-center py-8">
+        <div v-else-if="currentQuiz.questions && currentQuestionIndex >= currentQuiz.questions.length" class="text-center py-8">
           <div class="text-6xl mb-4">🎉</div>
           <h3 class="text-2xl font-bold text-purple-900 mb-2">Quiz Complete!</h3>
           <p class="text-lg text-gray-700 mb-6">
@@ -215,6 +224,22 @@
           >
             ▶️ Resume Video
           </button>
+        </div>
+        
+        <!-- Error State -->
+        <div v-else class="text-center py-8">
+          <div class="text-6xl mb-4">⚠️</div>
+          <h3 class="text-2xl font-bold text-red-900 mb-2">Quiz Error</h3>
+          <p class="text-lg text-gray-700 mb-6">
+            No questions available. Please try again.
+          </p>
+          <button
+            @click="resumeVideo"
+            class="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-indigo-700 transition-all"
+          >
+            ▶️ Resume Video
+          </button>
+        </div>
         </div>
       </div>
 
@@ -443,17 +468,20 @@ function checkForQuizCheckpoint() {
 }
 
 async function pauseForQuiz() {
-  console.log('Pausing video for quiz, video element:', videoPlayer.value)
+  console.log('=== PAUSE FOR QUIZ START ===')
+  console.log('Current checkpoint:', currentCheckpoint.value)
+  console.log('Study session:', studySession.value)
+  console.log('Video element:', videoPlayer.value)
   
   if (videoPlayer.value) {
     try {
       videoPlayer.value.pause()
-      console.log('Video paused successfully')
+      console.log('✓ Video paused successfully')
     } catch (error) {
-      console.error('Error pausing video:', error)
+      console.error('✗ Error pausing video:', error)
     }
   } else {
-    console.warn('Video player element not found!')
+    console.warn('✗ Video player element not found!')
   }
   
   quizMode.value = true
@@ -465,7 +493,16 @@ async function pauseForQuiz() {
     const slideEnd = checkpoints[currentCheckpoint.value]
     const slideStart = currentCheckpoint.value === 0 ? 0 : checkpoints[currentCheckpoint.value - 1] + 1
     
+    console.log('Quiz parameters:', {
+      project: selectedProject.value,
+      slide_start: slideStart,
+      slide_end: slideEnd,
+      num_questions: 5,
+      difficulty: difficulty.value
+    })
+    
     // Generate quiz
+    console.log('Sending quiz generation request...')
     const response = await tauriFetch(
       'http://127.0.0.1:8765/generate_quiz',
       {
@@ -485,21 +522,49 @@ async function pauseForQuiz() {
       }
     )
     
+    console.log('Quiz response status:', response.status)
+    console.log('Quiz response ok:', response.ok)
+    console.log('Quiz response data:', response.data)
+    
     if (response.ok) {
-      currentQuiz.value = response.data
+      const quizData = response.data
+      
+      // Validate quiz data structure
+      if (!quizData || !quizData.questions || !Array.isArray(quizData.questions)) {
+        console.error('✗ Invalid quiz data structure:', quizData)
+        alert('Quiz data is invalid. Please try again.')
+        resumeVideo()
+        return
+      }
+      
+      if (quizData.questions.length === 0) {
+        console.error('✗ Quiz has no questions!')
+        alert('Quiz generation produced no questions. Please try again.')
+        resumeVideo()
+        return
+      }
+      
+      currentQuiz.value = quizData
       currentQuestionIndex.value = 0
       quizScore.value = 0
       answeredQuestions.value = 0
+      console.log('✓ Quiz loaded successfully:', currentQuiz.value)
+      console.log('  - Number of questions:', currentQuiz.value.questions.length)
+      console.log('  - Questions array:', currentQuiz.value.questions)
+      console.log('  - First question:', currentQuiz.value.questions[0])
     } else {
-      alert('Failed to generate quiz')
+      console.error('✗ Quiz generation failed with status:', response.status)
+      alert('Failed to generate quiz: ' + (response.data?.detail || 'Unknown error'))
       resumeVideo()
     }
   } catch (error) {
-    console.error('Quiz generation error:', error)
+    console.error('✗ Quiz generation exception:', error)
+    console.error('Error stack:', error.stack)
     alert('Failed to generate quiz: ' + error.message)
     resumeVideo()
   } finally {
     loading.value = false
+    console.log('=== PAUSE FOR QUIZ END ===')
   }
 }
 

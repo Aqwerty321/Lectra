@@ -1,0 +1,35 @@
+{
+  "total_duration": 95.0,
+  "slide_timings": [
+    {
+      "slide": 1,
+      "start": 0.0,
+      "end": 15.5
+    },
+    {
+      "slide": 2,
+      "start": 15.5,
+      "end": 32.0
+    },
+    {
+      "slide": 3,
+      "start": 32.0,
+      "end": 48.5
+    },
+    {
+      "slide": 4,
+      "start": 48.5,
+      "end": 65.0
+    },
+    {
+      "slide": 5,
+      "start": 65.0,
+      "end": 82.0
+    },
+    {
+      "slide": 6,
+      "start": 82.0,
+      "end": 95.0
+    }
+  ]
+}

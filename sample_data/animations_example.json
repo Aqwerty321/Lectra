@@ -1,0 +1,260 @@
+{
+  "slides": [
+    {
+      "slide_number": 1,
+      "title": "Introduction to Psychology",
+      "start_time": 0.0,
+      "end_time": 15.5,
+      "steps": [
+        {
+          "element": "title",
+          "text": "What is Psychology?",
+          "hint": "Psychology comes from Greek words 'psyche' (soul) and 'logos' (study)"
+        },
+        {
+          "element": "bullet",
+          "text": "Scientific study of human mind and behavior",
+          "hint": "Psychology uses scientific methods to understand thoughts, feelings, and actions"
+        },
+        {
+          "element": "bullet",
+          "text": "Explores cognitive processes and mental states",
+          "hint": "Cognitive processes include memory, attention, perception, and problem-solving"
+        },
+        {
+          "element": "bullet",
+          "text": "Analyzes individual and group dynamics",
+          "hint": "Social psychology examines how people influence each other"
+        },
+        {
+          "element": "interactive",
+          "type": "slider",
+          "data": {
+            "title": "Stress Level Impact on Performance",
+            "min": 0,
+            "max": 100,
+            "step": 5,
+            "unit": "%",
+            "type": "stress",
+            "initial": 50
+          }
+        }
+      ]
+    },
+    {
+      "slide_number": 2,
+      "title": "Key Branches of Psychology",
+      "start_time": 15.5,
+      "end_time": 32.0,
+      "steps": [
+        {
+          "element": "heading",
+          "text": "Major Fields"
+        },
+        {
+          "element": "bullet",
+          "text": "Clinical Psychology: Diagnosis and treatment of mental disorders",
+          "hint": "Clinical psychologists often work in hospitals, clinics, or private practice"
+        },
+        {
+          "element": "bullet",
+          "text": "Cognitive Psychology: Study of mental processes like memory and learning",
+          "hint": "Cognitive psychologists investigate how we think, remember, and solve problems"
+        },
+        {
+          "element": "bullet",
+          "text": "Developmental Psychology: Changes across the lifespan",
+          "hint": "From infancy to old age, developmental psychology tracks human growth"
+        },
+        {
+          "element": "bullet",
+          "text": "Social Psychology: How people interact and influence each other",
+          "hint": "Topics include conformity, persuasion, prejudice, and group behavior"
+        },
+        {
+          "element": "interactive",
+          "type": "toggle",
+          "data": {
+            "title": "Compare Psychology Approaches",
+            "options": [
+              {
+                "label": "Behavioral",
+                "description": "Focuses on observable behaviors and how they're learned through conditioning",
+                "emoji": "🐁",
+                "icon": "1️⃣",
+                "color": "#10b981"
+              },
+              {
+                "label": "Cognitive",
+                "description": "Emphasizes mental processes like thinking, memory, and problem-solving",
+                "emoji": "🧠",
+                "icon": "2️⃣",
+                "color": "#3b82f6"
+              },
+              {
+                "label": "Humanistic",
+                "description": "Centers on personal growth, self-actualization, and human potential",
+                "emoji": "🌟",
+                "icon": "3️⃣",
+                "color": "#f59e0b"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "slide_number": 3,
+      "title": "The Scientific Method in Psychology",
+      "start_time": 32.0,
+      "end_time": 48.5,
+      "steps": [
+        {
+          "element": "bullet",
+          "text": "Step 1: Observe and ask questions about behavior",
+          "hint": "Good research starts with curiosity about why people act the way they do"
+        },
+        {
+          "element": "bullet",
+          "text": "Step 2: Form a testable hypothesis",
+          "hint": "A hypothesis is a specific, falsifiable prediction about relationships between variables"
+        },
+        {
+          "element": "bullet",
+          "text": "Step 3: Design and conduct experiments",
+          "hint": "Experiments use controlled conditions to test cause-and-effect relationships"
+        },
+        {
+          "element": "bullet",
+          "text": "Step 4: Analyze data using statistics",
+          "hint": "Statistical analysis helps determine if results are meaningful or due to chance"
+        },
+        {
+          "element": "bullet",
+          "text": "Step 5: Draw conclusions and share findings",
+          "hint": "Peer review and replication are crucial for scientific validity"
+        }
+      ]
+    },
+    {
+      "slide_number": 4,
+      "title": "The Brain and Nervous System",
+      "start_time": 48.5,
+      "end_time": 65.0,
+      "steps": [
+        {
+          "element": "text",
+          "text": "The human brain contains approximately 86 billion neurons, each capable of connecting with thousands of others.",
+          "hint": "This creates an incredibly complex network for processing information"
+        },
+        {
+          "element": "heading",
+          "text": "Key Brain Structures"
+        },
+        {
+          "element": "bullet",
+          "text": "Frontal Lobe: Executive functions, decision-making, personality",
+          "hint": "Damage to the frontal lobe can dramatically change personality and behavior"
+        },
+        {
+          "element": "bullet",
+          "text": "Temporal Lobe: Memory, language comprehension, auditory processing",
+          "hint": "The hippocampus in the temporal lobe is crucial for forming new memories"
+        },
+        {
+          "element": "bullet",
+          "text": "Occipital Lobe: Visual processing and interpretation",
+          "hint": "All visual information from your eyes is processed in the occipital lobe"
+        },
+        {
+          "element": "bullet",
+          "text": "Parietal Lobe: Sensory integration, spatial awareness",
+          "hint": "Helps you understand where your body is in space and process touch sensations"
+        }
+      ]
+    },
+    {
+      "slide_number": 5,
+      "title": "Memory and Learning",
+      "start_time": 65.0,
+      "end_time": 82.0,
+      "steps": [
+        {
+          "element": "heading",
+          "text": "Types of Memory"
+        },
+        {
+          "element": "bullet",
+          "text": "Sensory Memory: Brief storage of sensory information (< 1 second)",
+          "hint": "Like a camera flash - information is captured but fades almost immediately"
+        },
+        {
+          "element": "bullet",
+          "text": "Short-term Memory: Temporary storage, limited capacity (7±2 items)",
+          "hint": "This is why phone numbers are typically 7 digits - it fits our short-term capacity"
+        },
+        {
+          "element": "bullet",
+          "text": "Long-term Memory: Potentially unlimited storage duration",
+          "hint": "Can be divided into explicit (conscious) and implicit (unconscious) memories"
+        },
+        {
+          "element": "heading",
+          "text": "Effective Learning Strategies"
+        },
+        {
+          "element": "bullet",
+          "text": "Spaced repetition: Review material at increasing intervals",
+          "hint": "More effective than cramming - helps move information to long-term memory"
+        },
+        {
+          "element": "bullet",
+          "text": "Active recall: Test yourself rather than passively re-reading",
+          "hint": "The act of retrieving information strengthens memory pathways"
+        },
+        {
+          "element": "bullet",
+          "text": "Elaborative encoding: Connect new info to existing knowledge",
+          "hint": "Creating meaningful connections makes information easier to remember"
+        }
+      ]
+    },
+    {
+      "slide_number": 6,
+      "title": "Conclusion and Key Takeaways",
+      "start_time": 82.0,
+      "end_time": 95.0,
+      "steps": [
+        {
+          "element": "heading",
+          "text": "Remember These Key Points"
+        },
+        {
+          "element": "bullet",
+          "text": "Psychology is a science that uses empirical methods",
+          "hint": "Not just opinions - psychology relies on data and controlled experiments"
+        },
+        {
+          "element": "bullet",
+          "text": "Multiple perspectives offer different insights into behavior",
+          "hint": "Behavioral, cognitive, humanistic, and biological perspectives complement each other"
+        },
+        {
+          "element": "bullet",
+          "text": "Understanding the brain helps us understand the mind",
+          "hint": "Neuroscience and psychology are increasingly interconnected fields"
+        },
+        {
+          "element": "bullet",
+          "text": "Effective learning requires active engagement and strategy",
+          "hint": "Apply spaced repetition, active recall, and elaborative encoding to your studies"
+        },
+        {
+          "element": "text",
+          "text": "Continue exploring psychology to better understand yourself and others!",
+          "hint": "Psychology is relevant to every aspect of human life"
+        }
+      ]
+    }
+  ]
+}
