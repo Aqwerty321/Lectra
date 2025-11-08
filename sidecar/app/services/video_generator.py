@@ -540,7 +540,7 @@ def create_video_from_slides(
     video_codec: str = 'libx264',
     audio_codec: str = 'aac',
     crf: int = 23,
-    add_subtitles: bool = True
+    add_subtitles: bool = False
 ) -> Path:
     """
     Create MP4 video from slide images and audio with perfect synchronization.
@@ -555,7 +555,7 @@ def create_video_from_slides(
         video_codec: Video codec (default: libx264 for H.264)
         audio_codec: Audio codec (default: aac)
         crf: Constant Rate Factor for quality (18-28, lower=better, default: 23)
-        add_subtitles: Whether to burn subtitles into video (default: True)
+        add_subtitles: Whether to burn subtitles into video (default: False)
         
     Returns:
         Path to created video file
@@ -645,7 +645,7 @@ def create_video_from_slides(
             # Escape Windows paths for FFmpeg
             subtitle_path_escaped = str(subtitle_file.absolute()).replace('\\', '/').replace(':', '\\:')
             video_cmd.extend([
-                '-vf', f"subtitles='{subtitle_path_escaped}':force_style='FontName=Arial,FontSize=24,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,BorderStyle=3,Outline=2,Shadow=1,MarginV=30'",
+                '-vf', f"subtitles='{subtitle_path_escaped}':charenc=UTF-8:force_style='FontName=Arial,FontSize=24,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,BorderStyle=3,Outline=2,Shadow=1,MarginV=30'",
             ])
         
         video_cmd.extend([
@@ -766,7 +766,7 @@ def generate_presentation_video(
         output_path,
         sentence_timings=sentence_timings,
         fps=fps,
-        add_subtitles=bool(sentence_timings)
+        add_subtitles=False  # Respect default parameter - subtitles disabled by default
     )
     
     print(f"\n{'='*60}")

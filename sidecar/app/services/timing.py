@@ -13,10 +13,10 @@ def _count_words(text: str) -> int:
 
 
 def _count_punctuation(text: str) -> Dict[str, int]:
-    """Count punctuation marks for pause estimation."""
+    """Count punctuation marks for pause estimation (including Hindi punctuation)."""
     return {
         'comma': text.count(','),
-        'period': text.count('.'),
+        'period': text.count('.') + text.count('।') + text.count('॥'),  # Include Hindi purna viram and double danda
         'question': text.count('?'),
         'exclamation': text.count('!'),
         'ellipsis': text.count('…') + text.count('...')

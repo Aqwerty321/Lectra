@@ -17,7 +17,8 @@ class QuizGenerator:
         slide_content: str,
         slide_titles: List[str],
         num_questions: int = 5,
-        difficulty: str = "medium"
+        difficulty: str = "medium",
+        lang: str = "en"
     ) -> List[Dict[str, Any]]:
         """
         Generate multiple choice questions from slide content.
@@ -27,13 +28,14 @@ class QuizGenerator:
             slide_titles: List of slide titles for context
             num_questions: Number of MCQs to generate
             difficulty: easy, medium, or hard
+            lang: Language code (en or hi)
             
         Returns:
             List of MCQ dictionaries with question, options, correct_answer, explanation
         """
         
         # Craft prompt for Ollama
-        prompt = self._build_quiz_prompt(slide_content, slide_titles, num_questions, difficulty)
+        prompt = self._build_quiz_prompt(slide_content, slide_titles, num_questions, difficulty, lang)
         
         try:
             response = requests.post(
@@ -67,7 +69,8 @@ class QuizGenerator:
         content: str,
         titles: List[str],
         num_questions: int,
-        difficulty: str
+        difficulty: str,
+        lang: str = "en"
     ) -> str:
         """Build the prompt for Ollama to generate MCQs."""
         
@@ -77,7 +80,13 @@ class QuizGenerator:
             "hard": "Require analysis, synthesis, and critical thinking"
         }
         
+        # Language-specific instructions
+        language_instruction = ""
+        if lang == "hi":
+            language_instruction = "\n\nIMPORTANT: Generate ALL quiz questions, options, explanations, and hints in HINDI language (Devanagari script). The questions should be natural Hindi, not English transliterated to Devanagari."
+        
         prompt = f"""You are an expert educational quiz generator. Create {num_questions} multiple-choice questions based on this lecture content.
+{language_instruction}
 
 LECTURE TOPICS:
 {chr(10).join(f"- {title}" for title in titles)}
@@ -92,6 +101,7 @@ REQUIREMENTS:
 - Only ONE correct answer per question
 - Include detailed explanations for why each option is correct/incorrect
 - Questions should test understanding, not just memorization
+{"- ALL text must be in HINDI (Devanagari script)" if lang == "hi" else ""}
 
 FORMAT YOUR RESPONSE EXACTLY AS:
 ```json
@@ -246,6 +256,9 @@ def generate_quiz_for_slides(
     with open(metadata_path, 'r', encoding='utf-8') as f:
         metadata = json.load(f)
     
+    # Detect language from metadata
+    lang = metadata.get("lang", "en")
+    
     # Extract slide content from range
     slides = metadata.get("slides", [])
     start, end = slide_range
@@ -262,15 +275,16 @@ def generate_quiz_for_slides(
         for i, slide in enumerate(target_slides)
     ])
     
-    # Generate quiz
+    # Generate quiz with language support
     generator = QuizGenerator()
-    mcqs = generator.generate_mcqs(slide_content, slide_titles, num_questions, difficulty)
+    mcqs = generator.generate_mcqs(slide_content, slide_titles, num_questions, difficulty, lang)
     
     return {
         "slide_range": slide_range,
         "slide_titles": slide_titles,
         "num_questions": len(mcqs),
         "difficulty": difficulty,
+        "lang": lang,
         "questions": mcqs,
         "checkpoint_id": f"quiz_{start}_{end}"
     }

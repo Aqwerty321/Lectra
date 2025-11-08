@@ -5,15 +5,16 @@ from typing import Optional, Tuple, List, Dict
 
 
 def _split_sentences(text: str) -> list[str]:
-    """Simple sentence splitter on .!? followed by whitespace."""
-    # Split on sentence boundaries but keep the punctuation
-    sentences = re.split(r'([.!?])\s+', text)
+    """Simple sentence splitter on .!? and Hindi punctuation (।॥) followed by whitespace."""
+    # Split on sentence boundaries (English and Hindi) but keep the punctuation
+    # Added Hindi purna viram (।) and double danda (॥)
+    sentences = re.split(r'([.!?।॥])\s+', text)
     
     # Re-combine punctuation with sentences
     result = []
     i = 0
     while i < len(sentences):
-        if i + 1 < len(sentences) and sentences[i + 1] in '.!?':
+        if i + 1 < len(sentences) and sentences[i + 1] in '.!?।॥':
             result.append(sentences[i] + sentences[i + 1])
             i += 2
         else:

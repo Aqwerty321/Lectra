@@ -5,7 +5,7 @@ import json
 from typing import Dict, List
 from pathlib import Path
 import aiohttp
-from .slide_generator import OUTLINE_SYSTEM_PROMPT, CONTENT_SYSTEM_PROMPT, get_current_context
+from .slide_generator import get_current_context, get_outline_system_prompt, get_content_system_prompt
 
 
 class AsyncSlideGenerator:
@@ -27,7 +27,7 @@ class AsyncSlideGenerator:
         if self._session:
             await self._session.close()
     
-    async def generate_outline(self, topic: str) -> Dict:
+    async def generate_outline(self, topic: str, lang: str = "en") -> Dict:
         """Generate presentation outline asynchronously."""
         web_context = get_current_context(topic)
         prompt = f"Create a professional presentation outline for the topic: {topic}{web_context}"
@@ -38,7 +38,7 @@ class AsyncSlideGenerator:
                 json={
                     "model": self.model,
                     "prompt": prompt,
-                    "system": OUTLINE_SYSTEM_PROMPT,
+                    "system": get_outline_system_prompt(lang),
                     "stream": False,
                     "options": {
                         "temperature": 0.3,
@@ -68,7 +68,8 @@ class AsyncSlideGenerator:
     async def generate_slide_content(
         self,
         slide_title: str,
-        context: str
+        context: str,
+        lang: str = "en"
     ) -> Dict:
         """Generate content for a single slide asynchronously."""
         prompt = f"""Presentation Context: {context}
@@ -83,7 +84,7 @@ Create comprehensive content for this slide."""
                 json={
                     "model": self.model,
                     "prompt": prompt,
-                    "system": CONTENT_SYSTEM_PROMPT,
+                    "system": get_content_system_prompt(lang),
                     "stream": False,
                     "options": {
                         "temperature": 0.5,
@@ -171,12 +172,16 @@ Create comprehensive content for this slide."""
         
         return presentation
     
-    async def generate_slides_streaming(self, outline: Dict):
+    async def generate_slides_streaming(self, outline: Dict, lang: str = "en"):
         """
         Generate slides one by one (streaming) for immediate downstream processing.
         
         Yields each slide as soon as it's generated, allowing parallel TTS/image tasks
         to start immediately instead of waiting for all slides.
+        
+        Args:
+            outline: Presentation outline dict
+            lang: Language code ('en' or 'hi')
         
         Yields:
             Dict: Slide data with title, type, points, speaker_notes, slide_index
@@ -200,7 +205,7 @@ Create comprehensive content for this slide."""
                 # Generate content for this slide
                 try:
                     print(f"[⚡ Streaming] Generating slide {slide_index + 1}: {slide['title']}")
-                    content = await self.generate_slide_content(slide["title"], context)
+                    content = await self.generate_slide_content(slide["title"], context, lang=lang)
                     
                     yield {
                         "title": slide["title"],
@@ -224,10 +229,10 @@ Create comprehensive content for this slide."""
                     slide_index += 1
 
 
-async def generate_outline_async(topic: str, model: str = "llama3.1", ollama_url: str = "http://localhost:11434") -> Dict:
+async def generate_outline_async(topic: str, lang: str = "en", model: str = "llama3.1", ollama_url: str = "http://localhost:11434") -> Dict:
     """Standalone async outline generation."""
     async with AsyncSlideGenerator(model, ollama_url) as generator:
-        return await generator.generate_outline(topic)
+        return await generator.generate_outline(topic, lang=lang)
 
 
 async def generate_full_script_async(
@@ -242,6 +247,7 @@ async def generate_full_script_async(
 
 async def generate_slides_streaming_async(
     outline: Dict,
+    lang: str = "en",
     model: str = "llama3.1",
     ollama_url: str = "http://localhost:11434"
 ):
@@ -252,7 +258,7 @@ async def generate_slides_streaming_async(
     This enables overlapping operations instead of sequential execution.
     """
     async with AsyncSlideGenerator(model, ollama_url) as generator:
-        async for slide in generator.generate_slides_streaming(outline):
+        async for slide in generator.generate_slides_streaming(outline, lang=lang):
             yield slide
 
 

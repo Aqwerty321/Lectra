@@ -51,18 +51,25 @@ def get_current_context(topic: str, max_results: int = 5) -> str:
         return ""
 
 
-OUTLINE_SYSTEM_PROMPT = """You are a professional presentation outline creator. Given a topic, generate a comprehensive presentation outline with 8-12 slides.
+def get_outline_system_prompt(lang: str = "en") -> str:
+    """Get outline system prompt with language specification."""
+    language_instruction = ""
+    if lang == "hi":
+        language_instruction = "\n\nIMPORTANT: Generate ALL content in HINDI language. Slide titles, presentation title - everything must be in Hindi (Devanagari script)."
+    
+    return f"""You are a professional presentation outline creator. Given a topic, generate a comprehensive presentation outline with 8-12 slides.
+{language_instruction}
 
 Return ONLY valid JSON in this exact format:
-{
+{{
   "title": "Presentation Title",
   "slides": [
-    {"title": "Slide Title", "type": "title"},
-    {"title": "Introduction", "type": "content"},
-    {"title": "Main Point 1", "type": "content"},
+    {{"title": "Slide Title", "type": "title"}},
+    {{"title": "Introduction", "type": "content"}},
+    {{"title": "Main Point 1", "type": "content"}},
     ...
   ]
-}
+}}
 
 Rules:
 - First slide must be type "title" with the main presentation title
@@ -72,10 +79,17 @@ Rules:
 - No markdown, no extra text, ONLY JSON"""
 
 
-CONTENT_SYSTEM_PROMPT = """You are a professional presentation content writer. Given a slide title and presentation context, generate detailed bullet points for that slide.
+def get_content_system_prompt(lang: str = "en") -> str:
+    """Get content system prompt with language specification."""
+    language_instruction = ""
+    if lang == "hi":
+        language_instruction = "\n\nIMPORTANT: Generate ALL content in HINDI language. Bullet points and speaker notes must be in Hindi (Devanagari script)."
+    
+    return f"""You are a professional presentation content writer. Given a slide title and presentation context, generate detailed bullet points for that slide.
+{language_instruction}
 
 Return ONLY valid JSON in this exact format:
-{
+{{
   "points": [
     "First key point with clear explanation",
     "Second important point with details",
@@ -83,7 +97,7 @@ Return ONLY valid JSON in this exact format:
     ...
   ],
   "speaker_notes": "Detailed speaker notes explaining the slide content, providing context, examples, and talking points for the presenter. This should be 2-3 sentences."
-}
+}}
 
 Rules:
 - 3-5 bullet points per slide
@@ -93,7 +107,17 @@ Rules:
 - ONLY return JSON"""
 
 
-def generate_outline(topic: str, model: str = "llama3.1", ollama_url: str = "http://localhost:11434") -> Dict:
+# Keep old constants for backwards compatibility
+OUTLINE_SYSTEM_PROMPT = get_outline_system_prompt("en")
+CONTENT_SYSTEM_PROMPT = get_content_system_prompt("en")
+
+
+def generate_outline(
+    topic: str,
+    model: str = "llama3.1",
+    ollama_url: str = "http://localhost:11434",
+    lang: str = "en"
+) -> Dict:
     """
     Generate presentation outline from topic using Ollama with current web context.
     
@@ -101,6 +125,7 @@ def generate_outline(topic: str, model: str = "llama3.1", ollama_url: str = "htt
         topic: The presentation topic
         model: Ollama model name
         ollama_url: Ollama API URL
+        lang: Language code ('en' or 'hi')
         
     Returns:
         Dict with 'title' and 'slides' list
@@ -116,7 +141,7 @@ def generate_outline(topic: str, model: str = "llama3.1", ollama_url: str = "htt
             json={
                 "model": model,
                 "prompt": prompt,
-                "system": OUTLINE_SYSTEM_PROMPT,
+                "system": get_outline_system_prompt(lang),
                 "stream": False,
                 "options": {
                     "temperature": 0.3,
@@ -155,7 +180,8 @@ def generate_slide_content(
     slide_title: str,
     presentation_context: str,
     model: str = "llama3.1",
-    ollama_url: str = "http://localhost:11434"
+    ollama_url: str = "http://localhost:11434",
+    lang: str = "en"
 ) -> Dict:
     """
     Generate content for a specific slide.
@@ -165,6 +191,7 @@ def generate_slide_content(
         presentation_context: Context about the presentation topic
         model: Ollama model name
         ollama_url: Ollama API URL
+        lang: Language code ('en' or 'hi')
         
     Returns:
         Dict with 'points' and 'speaker_notes'
@@ -180,7 +207,7 @@ Generate detailed content for this slide."""
             json={
                 "model": model,
                 "prompt": prompt,
-                "system": CONTENT_SYSTEM_PROMPT,
+                "system": get_content_system_prompt(lang),
                 "stream": False,
                 "options": {
                     "temperature": 0.2,

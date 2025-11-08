@@ -308,7 +308,7 @@ async def generate_presentation(request: PresentationRequest):
             # STEP 1: Generate outline (fast, sequential)
             with Timer("Step 1: Generate Outline"):
                 try:
-                    outline = await slide_generator_async.generate_outline_async(request.topic)
+                    outline = await slide_generator_async.generate_outline_async(request.topic, lang=request.lang)
                     slide_generator_async.save_outline(outline, project_dir / "outline.json")
                 except ConnectionError as e:
                     raise HTTPException(
@@ -350,7 +350,7 @@ async def generate_presentation(request: PresentationRequest):
                         return await tts_engine.synthesize_slide_narration(narration_text, voice, output_mp3)
                 
                 # Stream slides and spawn immediate tasks
-                async for slide in slide_generator_async.generate_slides_streaming_async(outline):
+                async for slide in slide_generator_async.generate_slides_streaming_async(outline, lang=request.lang):
                     slide_idx = slide["slide_index"]
                     slides_data.append(slide)
                     
@@ -504,10 +504,13 @@ async def generate_presentation(request: PresentationRequest):
                     accumulated_text += " " + speaker_notes
                     
                     # Count sentences in accumulated text so far
+                    # Support both English and Hindi punctuation
                     accumulated_sentences = (
-                        accumulated_text.count('.') + 
-                        accumulated_text.count('?') + 
-                        accumulated_text.count('!')
+                        accumulated_text.count('.') +   # English period
+                        accumulated_text.count('?') +   # Question mark
+                        accumulated_text.count('!') +   # Exclamation mark
+                        accumulated_text.count('।') +   # Hindi purna viram (Devanagari full stop)
+                        accumulated_text.count('॥')    # Hindi double danda (end of verse/section)
                     )
                     
                     # Determine how many sentences this slide should get
@@ -574,6 +577,88 @@ async def generate_presentation(request: PresentationRequest):
                     status="ok"
                 )
             
+            # STEP 6.5: Generate Interactive Animations (NEW!)
+            with Timer("Step 6.5: Generate Animations"):
+                try:
+                    print("\n🎨 Generating interactive animations for slides...")
+                    from .services.ollama_client import generate_animation_steps
+                    
+                    animations_data = {
+                        "slides": []
+                    }
+                    
+                    for slide_idx, slide in enumerate(slides_data):
+                        slide_num = slide_idx + 1
+                        slide_type = slide.get("type", "content")
+                        
+                        # Skip title slides for animations (they're static)
+                        if slide_type == "title":
+                            animations_data["slides"].append({
+                                "slide_number": slide_num,
+                                "steps": [{
+                                    "id": 1,
+                                    "text": slide.get("title", ""),
+                                    "action": "fadeIn",
+                                    "duration": 2.0,
+                                    "hint": "Welcome to this lecture!",
+                                    "element": "title"
+                                }]
+                            })
+                            continue
+                        
+                        # Generate animations for content slides
+                        slide_content = "\n".join(slide.get("points", []))
+                        slide_title = slide.get("title", "")
+                        speaker_notes = slide.get("speaker_notes", "")
+                        
+                        try:
+                            animation_steps = generate_animation_steps(
+                                slide_content=slide_content,
+                                slide_title=slide_title,
+                                speaker_notes=speaker_notes
+                            )
+                            
+                            # Add timing information from slide_timings
+                            slide_timing = next(
+                                (s for s in slide_timings['slides'] if s['slide'] == slide_idx),
+                                None
+                            )
+                            
+                            animations_data["slides"].append({
+                                "slide_number": slide_num,
+                                "start_time": slide_timing['start'] if slide_timing else 0,
+                                "end_time": slide_timing['end'] if slide_timing else 0,
+                                "steps": animation_steps.get("steps", [])
+                            })
+                            
+                            print(f"  ✓ Generated {len(animation_steps.get('steps', []))} animation steps for slide {slide_num}")
+                            
+                        except Exception as e:
+                            print(f"  ⚠️ Animation generation failed for slide {slide_num}: {e}")
+                            # Add fallback simple animation
+                            animations_data["slides"].append({
+                                "slide_number": slide_num,
+                                "steps": [{
+                                    "id": 1,
+                                    "text": slide_title,
+                                    "action": "fadeIn",
+                                    "duration": 2.0,
+                                    "hint": "Focus on this key concept",
+                                    "element": "text"
+                                }]
+                            })
+                    
+                    # Save animations JSON
+                    animations_path = project_dir / "animations.json"
+                    with open(animations_path, 'w', encoding='utf-8') as f:
+                        json.dump(animations_data, f, indent=2)
+                    
+                    print(f"✅ Animations saved: {animations_path}")
+                    
+                except Exception as e:
+                    print(f"⚠️ Animation generation failed (lecture still available): {str(e)}")
+                    animations_path = None
+            
             # STEP 7: Generate synced video (optional)
             video_path = None
             if request.generate_video:
@@ -619,10 +704,11 @@ async def generate_presentation(request: PresentationRequest):
                 "audio_path": str(mp3_path),
                 "narration_path": str(narration_path),
                 "slide_timings_path": str(project_dir / "slide_timings.json"),
+                "animations_path": str(project_dir / "animations.json") if (project_dir / "animations.json").exists() else None,
                 "duration_sec": audio_duration,
                 "outline": outline,
                 "slide_timings": slide_timings,
-                "features": ["AI-generated content", "Professional design", "Auto-fetched images", "Charts & diagrams", "Synchronized narration", "Streaming parallel execution"]
+                "features": ["AI-generated content", "Professional design", "Auto-fetched images", "Charts & diagrams", "Synchronized narration", "Streaming parallel execution", "Interactive animations"]
             }
             
             # Add video path if generated
@@ -674,7 +760,7 @@ async def generate_presentation_legacy(request: PresentationRequest):
             # STEP 1: Generate outline (fast, sequential)
             with Timer("Step 1: Generate Outline"):
                 try:
-                    outline = await slide_generator_async.generate_outline_async(request.topic)
+                    outline = await slide_generator_async.generate_outline_async(request.topic, lang=request.lang)
                     slide_generator_async.save_outline(outline, project_dir / "outline.json")
                 except ConnectionError as e:
                     raise HTTPException(
@@ -1085,6 +1171,60 @@ async def get_video(project: str):
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get video: {str(e)}"
+        )
+
+
+@app.get("/get_slide_timings")
+async def get_slide_timings(project: str):
+    """Get the slide timings for accurate slide tracking during video playback."""
+    try:
+        project_dir = Path.home() / "Lectures" / project
+        timings_path = project_dir / "slide_timings.json"
+        
+        if not timings_path.exists():
+            raise HTTPException(
+                status_code=404,
+                detail="Slide timings not found. Generate a presentation first."
+            )
+        
+        with open(timings_path, "r", encoding="utf-8") as f:
+            timings_data = json.load(f)
+        
+        return timings_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get slide timings: {str(e)}"
+        )
+
+
+@app.get("/get_animations")
+async def get_animations(project: str):
+    """Get the interactive animation steps for the lecture player."""
+    try:
+        project_dir = Path.home() / "Lectures" / project
+        animations_path = project_dir / "animations.json"
+        
+        if not animations_path.exists():
+            raise HTTPException(
+                status_code=404,
+                detail="Animations not found. Generate a presentation first."
+            )
+        
+        with open(animations_path, "r", encoding="utf-8") as f:
+            animations_data = json.load(f)
+        
+        return animations_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get animations: {str(e)}"
         )
 
 

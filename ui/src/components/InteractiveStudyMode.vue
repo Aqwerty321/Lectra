@@ -367,6 +367,20 @@ async function startStudySession() {
     videoPath.value = videoResp.data.video_path
     sessionStartTime.value = Date.now()
     
+    // Load slide timings for accurate slide tracking
+    try {
+      const timingsResp = await tauriFetch(
+        `http://127.0.0.1:8765/get_slide_timings?project=${selectedProject.value}`,
+        { method: 'GET', responseType: 1 }
+      )
+      if (timingsResp.ok && timingsResp.data.slides) {
+        studySession.value.slide_timings = timingsResp.data.slides
+        console.log('Loaded slide timings:', studySession.value.slide_timings)
+      }
+    } catch (error) {
+      console.warn('Failed to load slide timings, falling back to approximate calculation:', error)
+    }
+    
     // Start duration timer
     startDurationTimer()
     
@@ -381,14 +395,34 @@ async function startStudySession() {
 function onVideoTimeUpdate() {
   if (!videoPlayer.value || !studySession.value || quizMode.value) return
   
-  // Calculate current slide based on video time
-  // This is approximate - you may want to use the slide timings from metadata
   const currentTime = videoPlayer.value.currentTime
   const totalDuration = videoPlayer.value.duration
   
   if (totalDuration > 0) {
-    const slideProgress = (currentTime / totalDuration) * totalSlides.value
-    const newSlide = Math.floor(slideProgress)
+    let newSlide = currentSlide.value
+    
+    // Use actual slide timings if available (ACCURATE)
+    if (studySession.value.slide_timings && studySession.value.slide_timings.length > 0) {
+      const timings = studySession.value.slide_timings
+      
+      // Find which slide the current time falls into
+      for (let i = 0; i < timings.length; i++) {
+        if (currentTime >= timings[i].start && currentTime < timings[i].end) {
+          newSlide = i
+          break
+        }
+      }
+      
+      // Handle end of video (might be past last slide's end time)
+      if (currentTime >= timings[timings.length - 1].end) {
+        newSlide = timings.length - 1
+      }
+    } else {
+      // Fallback to linear approximation (INACCURATE but better than nothing)
+      console.warn('Using approximate slide calculation - slide timings not loaded')
+      const slideProgress = (currentTime / totalDuration) * totalSlides.value
+      newSlide = Math.floor(slideProgress)
+    }
     
     if (newSlide !== currentSlide.value) {
       currentSlide.value = newSlide
