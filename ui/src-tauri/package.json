@@ -1,0 +1,12 @@
+{
+  "name": "lectra",
+  "version": "1.0.0",
+  "description": "Lecture TTS with Realistic Audio",
+  "scripts": {
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^1.5.0",
+    "@tauri-apps/cli": "^1.5.0"
+  }
+}

@@ -1,0 +1,78 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Python Environment
+.python-version
+*.egg-info/
+dist/
+build/
+
+# Environment variables
+.env
+.env.local
+
+# Outputs and generated content
+outputs/
+C:/Users/*/Lectures/
+*.mp3
+*.mp4
+*.wav
+*.pptx
+*.pdf
+*.docx
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Tauri
+ui/src-tauri/target/
+ui/src-tauri/Cargo.lock
+
+# Node/NPM
+ui/node_modules/
+ui/dist/
+ui/.vite/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+
+# Project specific
+sidecar/chroma_db/
+sidecar/app/data/
+ui/src-tauri/icons/*.png
+ui/src-tauri/icons/*.ico
+!ui/src-tauri/icons/icon.png
+!ui/src-tauri/icons/icon.ico

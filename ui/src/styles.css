@@ -1,0 +1,162 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Modulus font - Regular (400) */
+@font-face {
+  font-family: 'Modulus';
+  src: url('./assets/fonts/Modulus.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Modulus font - Medium (500) */
+@font-face {
+  font-family: 'Modulus';
+  src: url('./assets/fonts/Modulus_Medium.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Modulus font - Bold (700) */
+@font-face {
+  font-family: 'Modulus';
+  src: url('./assets/fonts/Modulus-Bold.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Modulus font - Black (900) - fallback to Bold */
+@font-face {
+  font-family: 'Modulus';
+  src: url('./assets/fonts/Modulus-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+body {
+  margin: 0;
+  font-family: 'Modulus', 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-weight: 900;
+  font-size: 24px;
+  -webkit-text-stroke: 0.5px;
+  letter-spacing: 0.3px;
+}
+
+/* Increase all text sizes by 8px globally */
+@layer base {
+  html {
+    font-size: 24px;
+  }
+  
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  .font-medium {
+    font-weight: 900;
+    -webkit-text-stroke: 1px;
+  }
+  .font-bold {
+    font-weight: 900;
+    -webkit-text-stroke: 1.4px;
+  }
+  .font-black {
+    font-weight: 900;
+    -webkit-text-stroke: 2px;
+  }
+  
+  /* Make all text bolder and thicker */
+  p, span, div, a, li, label, button, input, textarea, select {
+    font-weight: 900;
+    -webkit-text-stroke: 1px;
+    letter-spacing: 0.3px;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 900;
+    -webkit-text-stroke: 2px;
+    letter-spacing: 0.5px;
+  }
+}
+
+/* Glassmorphism card style - pure transparent with minimal blur */
+.glass-card {
+  @apply backdrop-blur-sm rounded-2xl border-2 border-white/30 shadow-2xl;
+  background: transparent;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* Slightly stronger blur for prominent UI elements */
+.glass-card-90 {
+  @apply backdrop-blur-sm rounded-2xl border-2 border-white/40 shadow-2xl;
+  background: transparent;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+/* Wood texture backgrounds - will use images when available, fallback to solid colors */
+.bg-darkest-wood {
+  background-color: #2d2d2d;
+  background-image: 
+    linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)),
+    url('./assets/images/darkest_wood.png');
+  background-repeat: repeat;
+  background-size: 512px 512px;
+}
+
+.bg-dark-wood {
+  background-color: #3d3d3d;
+  background-image: 
+    linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)),
+    url('./assets/images/dark_wood.png');
+  background-repeat: repeat;
+  background-size: 512px 512px;
+}
+
+.bg-light-wood {
+  background-color: #f5e6d3;
+  background-image: 
+    linear-gradient(rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.3)),
+    url('./assets/images/light_wood.png');
+  background-repeat: repeat;
+  background-size: 512px 512px;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* Fade sections - start invisible */
+.fade-section {
+  opacity: 0;
+  transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: opacity;
+}

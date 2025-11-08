@@ -1,0 +1,389 @@
+"""
+Dynamic Slide Layout Engine - Algorithmic text fitting with pagination.
+
+This module implements a mathematical approach to fitting text content across slides
+with perfect spacing, no overlaps, and automatic pagination when content exceeds available space.
+
+Core Algorithm:
+    H_used = Σ(N_lines(p) × L_height) + (n-1) × P_spacing
+    Slide is valid if: H_used ≤ H_textbox
+
+Where:
+    - H_slide = total slide height (points)
+    - M_top, M_bottom = top/bottom margins
+    - H_textbox = H_slide - (M_top + M_bottom)
+    - L_height = font_size × line_spacing
+    - P_spacing = spacing between paragraphs
+    - N_lines(p) = estimated lines for paragraph p
+"""
+
+from typing import List, Dict, Tuple, Optional
+from dataclasses import dataclass
+import math
+
+
+@dataclass
+class LayoutConfig:
+    """Configuration for slide layout calculations."""
+    # Slide dimensions (in points: 1 inch = 72 points)
+    slide_height: float = 540  # 7.5 inches = 540 points (5.625" * 72 + title bar)
+    
+    # Margins (in points)
+    margin_top: float = 86.4  # 1.2 inches (72 * 1.2) - space after title bar
+    margin_bottom: float = 21.6  # 0.3 inches (72 * 0.3)
+    margin_left: float = 36  # 0.5 inches
+    margin_right: float = 36  # 0.5 inches
+    
+    # Typography
+    font_size: float = 14  # Default font size in points
+    line_spacing: float = 1.2  # Line height multiplier
+    para_spacing: float = 12  # Spacing between paragraphs (points)
+    
+    # Character estimation
+    chars_per_line: int = 80  # Approximate characters per line for wrapping
+    
+    # Layout behavior
+    auto_center_vertical: bool = True  # Center text when space available
+    auto_adjust_font: bool = True  # Reduce font if slightly over (10%)
+    font_adjustment_threshold: float = 0.10  # 10% over threshold
+    min_font_size: float = 10  # Minimum allowed font size
+    
+    # Spacing adjustments
+    sparse_content_multiplier: float = 1.5  # Increase spacing if <3 paragraphs
+    sparse_content_threshold: int = 3
+
+
+@dataclass
+class ParagraphMetrics:
+    """Calculated metrics for a single paragraph."""
+    text: str
+    is_subpoint: bool  # Indented sub-bullet
+    estimated_lines: int
+    height_required: float  # In points
+    font_size: float
+
+
+@dataclass
+class SlideLayout:
+    """Layout information for a single slide."""
+    paragraphs: List[str]
+    paragraph_metrics: List[ParagraphMetrics]
+    total_height_used: float  # Points
+    available_height: float  # Points
+    top_padding: float  # Vertical centering offset
+    font_size: float
+    para_spacing: float
+    overflow_detected: bool = False
+
+
+class SlideLayoutEngine:
+    """
+    Dynamic layout engine for PowerPoint slides with algorithmic text fitting.
+    
+    Features:
+    - Automatic pagination when content exceeds available space
+    - Perfect vertical spacing with no overlaps
+    - Vertical centering when space available
+    - Automatic font size adjustment for slight overflows
+    - Sparse content spacing enhancement
+    - Detailed logging for debugging
+    
+    Usage:
+        engine = SlideLayoutEngine()
+        layouts = engine.calculate_layouts(paragraphs, font_size=14)
+        for layout in layouts:
+            # Create slide with layout.paragraphs
+            # Apply layout.top_padding for vertical centering
+    """
+    
+    def __init__(self, config: Optional[LayoutConfig] = None):
+        """
+        Initialize layout engine with configuration.
+        
+        Args:
+            config: Optional LayoutConfig, uses defaults if None
+        """
+        self.config = config or LayoutConfig()
+        self.debug_log = []  # Store layout decisions for debugging
+    
+    def calculate_layouts(
+        self,
+        paragraphs: List[str],
+        font_size: Optional[float] = None,
+        line_spacing: Optional[float] = None
+    ) -> List[SlideLayout]:
+        """
+        Calculate optimal layouts for given paragraphs, paginating as needed.
+        
+        Algorithm:
+        1. For each paragraph, estimate lines needed: ceil(len(text) / chars_per_line)
+        2. Calculate height: lines × (font_size × line_spacing)
+        3. Track cumulative height with paragraph spacing
+        4. When cumulative exceeds max, start new slide
+        5. Apply vertical centering and font adjustments per slide
+        
+        Args:
+            paragraphs: List of text strings (with optional '  ' prefix for sub-bullets)
+            font_size: Override default font size
+            line_spacing: Override default line spacing
+            
+        Returns:
+            List of SlideLayout objects (one per slide needed)
+        """
+        if not paragraphs:
+            # Return empty layout to prevent crashes
+            self.debug_log.append("Empty paragraph list - returning single empty layout")
+            return [SlideLayout(
+                paragraphs=[],
+                paragraph_metrics=[],
+                total_height_used=0,
+                available_height=self._calculate_available_height(),
+                top_padding=0,
+                font_size=font_size or self.config.font_size,
+                para_spacing=self.config.para_spacing
+            )]
+        
+        # Use config defaults if not overridden
+        font_size = font_size or self.config.font_size
+        line_spacing = line_spacing or self.config.line_spacing
+        
+        # Calculate available height for content
+        # H_textbox = H_slide - (M_top + M_bottom)
+        available_height = self._calculate_available_height()
+        
+        self.debug_log.append(f"Starting layout calculation:")
+        self.debug_log.append(f"  Total paragraphs: {len(paragraphs)}")
+        self.debug_log.append(f"  Available height: {available_height:.1f} pts")
+        self.debug_log.append(f"  Font size: {font_size} pts, Line spacing: {line_spacing}")
+        
+        # Group paragraphs into slides
+        slides: List[SlideLayout] = []
+        current_slide_paras = []
+        current_slide_metrics = []
+        current_height = 0
+        
+        for idx, para_text in enumerate(paragraphs):
+            # Detect sub-bullets (indented with 2 spaces)
+            is_subpoint = para_text.startswith('  ')
+            clean_text = para_text.strip()
+            
+            # === ESTIMATE LINES NEEDED ===
+            # N_lines(p) = ceil(len(p) / chars_per_line)
+            estimated_lines = max(1, math.ceil(len(clean_text) / self.config.chars_per_line))
+            
+            # Adjust for sub-bullets (slightly narrower due to indentation)
+            if is_subpoint:
+                estimated_lines = max(1, math.ceil(len(clean_text) / (self.config.chars_per_line - 10)))
+            
+            # === CALCULATE HEIGHT FOR THIS PARAGRAPH ===
+            # L_height = font_size × line_spacing
+            line_height = font_size * line_spacing
+            para_height = estimated_lines * line_height
+            
+            # Add paragraph spacing if not first paragraph in slide
+            spacing_needed = self.config.para_spacing if current_slide_paras else 0
+            
+            # === CHECK IF ADDING THIS PARAGRAPH EXCEEDS LIMIT ===
+            # H_used = Σ(N_lines(p) × L_height) + (n-1) × P_spacing
+            potential_height = current_height + spacing_needed + para_height
+            
+            if potential_height > available_height and current_slide_paras:
+                # === OVERFLOW DETECTED - CREATE NEW SLIDE ===
+                self.debug_log.append(f"  Paragraph {idx} causes overflow ({potential_height:.1f} > {available_height:.1f})")
+                self.debug_log.append(f"    Creating slide with {len(current_slide_paras)} paragraphs")
+                
+                # Finalize current slide
+                slide_layout = self._finalize_slide_layout(
+                    current_slide_paras,
+                    current_slide_metrics,
+                    current_height,
+                    available_height,
+                    font_size,
+                    self.config.para_spacing
+                )
+                slides.append(slide_layout)
+                
+                # Start new slide with overflow paragraph
+                current_slide_paras = [para_text]
+                current_slide_metrics = [ParagraphMetrics(
+                    text=clean_text,
+                    is_subpoint=is_subpoint,
+                    estimated_lines=estimated_lines,
+                    height_required=para_height,
+                    font_size=font_size
+                )]
+                current_height = para_height
+            else:
+                # === PARAGRAPH FITS - ADD TO CURRENT SLIDE ===
+                current_slide_paras.append(para_text)
+                current_slide_metrics.append(ParagraphMetrics(
+                    text=clean_text,
+                    is_subpoint=is_subpoint,
+                    estimated_lines=estimated_lines,
+                    height_required=para_height,
+                    font_size=font_size
+                ))
+                current_height = potential_height
+        
+        # === FINALIZE LAST SLIDE ===
+        if current_slide_paras:
+            slide_layout = self._finalize_slide_layout(
+                current_slide_paras,
+                current_slide_metrics,
+                current_height,
+                available_height,
+                font_size,
+                self.config.para_spacing
+            )
+            slides.append(slide_layout)
+        
+        self.debug_log.append(f"Layout complete: {len(slides)} slide(s) created")
+        return slides
+    
+    def _calculate_available_height(self) -> float:
+        """
+        Calculate available height for text content.
+        
+        Formula: H_textbox = H_slide - (M_top + M_bottom)
+        
+        Returns:
+            Available height in points
+        """
+        return self.config.slide_height - (self.config.margin_top + self.config.margin_bottom)
+    
+    def _finalize_slide_layout(
+        self,
+        paragraphs: List[str],
+        metrics: List[ParagraphMetrics],
+        height_used: float,
+        available_height: float,
+        font_size: float,
+        para_spacing: float
+    ) -> SlideLayout:
+        """
+        Finalize slide layout with centering and adjustments.
+        
+        Steps:
+        1. Check if slightly over limit (10% threshold)
+        2. If over: reduce font size by 10% and recalculate
+        3. If under and sparse content: increase paragraph spacing
+        4. Calculate vertical centering offset
+        
+        Args:
+            paragraphs: List of paragraph texts
+            metrics: List of ParagraphMetrics
+            height_used: Current height usage
+            available_height: Available height
+            font_size: Current font size
+            para_spacing: Current paragraph spacing
+            
+        Returns:
+            Finalized SlideLayout
+        """
+        overflow_detected = False
+        top_padding = 0
+        
+        # === CHECK FOR OVERFLOW ===
+        if height_used > available_height:
+            overflow_ratio = (height_used - available_height) / available_height
+            
+            if overflow_ratio <= self.config.font_adjustment_threshold and self.config.auto_adjust_font:
+                # === SLIGHT OVERFLOW - REDUCE FONT SIZE ===
+                old_font_size = font_size
+                font_size = max(
+                    self.config.min_font_size,
+                    font_size * 0.9  # Reduce by 10%
+                )
+                
+                # Recalculate heights with new font size
+                height_used = 0
+                for i, metric in enumerate(metrics):
+                    line_height = font_size * self.config.line_spacing
+                    metric.height_required = metric.estimated_lines * line_height
+                    metric.font_size = font_size
+                    
+                    if i > 0:
+                        height_used += para_spacing
+                    height_used += metric.height_required
+                
+                self.debug_log.append(f"    Font adjusted: {old_font_size} → {font_size} pts (overflow: {overflow_ratio*100:.1f}%)")
+            else:
+                # === SIGNIFICANT OVERFLOW ===
+                overflow_detected = True
+                self.debug_log.append(f"    ⚠️ Overflow detected: {height_used:.1f} > {available_height:.1f} pts")
+        
+        # === SPARSE CONTENT SPACING ADJUSTMENT ===
+        if len(paragraphs) < self.config.sparse_content_threshold:
+            old_spacing = para_spacing
+            para_spacing *= self.config.sparse_content_multiplier
+            
+            # Recalculate height with increased spacing
+            height_used = sum(m.height_required for m in metrics)
+            height_used += (len(metrics) - 1) * para_spacing
+            
+            self.debug_log.append(f"    Sparse content: spacing {old_spacing:.1f} → {para_spacing:.1f} pts")
+        
+        # === VERTICAL CENTERING ===
+        if self.config.auto_center_vertical and height_used < available_height:
+            # top_padding = (H_textbox - H_used) / 2
+            top_padding = (available_height - height_used) / 2
+            self.debug_log.append(f"    Vertical centering: {top_padding:.1f} pts top padding")
+        
+        # === LOG FINAL LAYOUT ===
+        self.debug_log.append(f"  Slide finalized: {len(paragraphs)} paragraphs, {height_used:.1f}/{available_height:.1f} pts used")
+        if top_padding > 0:
+            self.debug_log.append(f"    Top padding: {top_padding:.1f} pts")
+        
+        return SlideLayout(
+            paragraphs=paragraphs,
+            paragraph_metrics=metrics,
+            total_height_used=height_used,
+            available_height=available_height,
+            top_padding=top_padding,
+            font_size=font_size,
+            para_spacing=para_spacing,
+            overflow_detected=overflow_detected
+        )
+    
+    def get_debug_log(self) -> List[str]:
+        """
+        Get detailed layout decision log for debugging.
+        
+        Returns:
+            List of log messages
+        """
+        return self.debug_log.copy()
+    
+    def clear_debug_log(self):
+        """Clear the debug log."""
+        self.debug_log.clear()
+    
+    def print_debug_log(self):
+        """Print debug log to console."""
+        print("\n" + "="*60)
+        print("SLIDE LAYOUT ENGINE - DEBUG LOG")
+        print("="*60)
+        for msg in self.debug_log:
+            print(msg)
+        print("="*60 + "\n")
+
+
+def estimate_slide_count(paragraphs: List[str], config: Optional[LayoutConfig] = None) -> int:
+    """
+    Quick estimate of how many slides will be needed.
+    
+    Useful for pre-checking before full layout calculation.
+    
+    Args:
+        paragraphs: List of paragraph texts
+        config: Optional LayoutConfig
+        
+    Returns:
+        Estimated number of slides needed
+    """
+    if not paragraphs:
+        return 1
+    
+    engine = SlideLayoutEngine(config)
+    layouts = engine.calculate_layouts(paragraphs)
+    return len(layouts)
